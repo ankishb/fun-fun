@@ -70,8 +70,20 @@ class DDPG(object):
         self.atrain = tf.train.AdamOptimizer(LR_A).minimize(a_loss, var_list=self.ae_params)
 
         d_loss = tf.losses.mean_squared_error(labels=self.S_, predictions=self.s_hat)
-        print(d_loss)
-        self.dtrain = tf.train.AdamOptimizer(LR_D).minimize(d_loss, var_list=self.dy_params)
+
+        # r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_constant = 0.01  # Choose an appropriate one.
+        d_loss1 = d_loss + reg_constant * sum(reg_losses)
+        
+        """
+        r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_constant = 0.01  # Choose an appropriate one.
+        loss = my_normal_loss + reg_constant * sum(reg_losses)
+        """
+
+        self.dtrain = tf.train.AdamOptimizer(LR_D).minimize(d_loss1, var_list=self.dy_params)
 
         self.sess.run(tf.global_variables_initializer())
 
@@ -114,13 +126,15 @@ class DDPG(object):
     def _build_dyn(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
             nl1 = 30
+            r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
+            r22 = tf.contrib.layers.l2_regularizer(scale=0.01)
             # net_s = tf.layers.dense(s, 50, activation=tf.nn.relu, name='l_s', trainable=trainable)
             # net_a = tf.layers.dense(a, 50, activation=tf.nn.relu, name='l_a', trainable=trainable)
-            wd_s = tf.get_variable('wd_s', [self.s_dim, nl1], trainable=trainable)
-            wd_a = tf.get_variable('wd_a', [self.a_dim, nl1], trainable=trainable)
-            bd   = tf.get_variable('bd', [1, nl1], trainable=trainable)
+            wd_s = tf.get_variable('wd_s', [self.s_dim, nl1], trainable=trainable, regularizer=r2)
+            wd_a = tf.get_variable('wd_a', [self.a_dim, nl1], trainable=trainable, regularizer=r2)
+            bd   = tf.get_variable('bd', [1, nl1], trainable=trainable, regularizer=r2)
             net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) + bd)
-            net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.relu, name='l_sa', trainable=trainable)
+            net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.relu, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
             # a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
             return net_sa
 
@@ -173,7 +187,11 @@ for i in range(MAX_EPISODES):
         ddpg.dynamics_train(s, a, s_)
         ## train dynamics model
         # print(s_hat.reshape(-1).shape, s_.shape)
-        ddpg.store_transition(s, a, r / 10, s_hat)
+        if i > MAX_EPISODES/2:
+            ddpg.store_transition(s, a, r / 10, s_hat)
+        
+        else:
+            ddpg.store_transition(s, a, r / 10, s_)
 
         if ddpg.pointer > MEMORY_CAPACITY:
             var *= .9995    # decay the action randomness
@@ -196,4 +214,4 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-fig.savefig('results.png')
+fig.savefig('results3.png')
