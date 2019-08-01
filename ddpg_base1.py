@@ -63,8 +63,8 @@ class DDPG(object):
 
         q_target = self.R + GAMMA * q_
         # in the feed_dic for the td_error, the self.a should change to actions in memory
-        td_error = tf.losses.mean_squared_error(labels=q_target, predictions=q)
-        self.ctrain = tf.train.AdamOptimizer(LR_C).minimize(td_error, var_list=self.ce_params)
+        self.td_error = tf.losses.mean_squared_error(labels=q_target, predictions=q)
+        self.ctrain = tf.train.AdamOptimizer(LR_C).minimize(self.td_error, var_list=self.ce_params)
 
         a_loss = - tf.reduce_mean(q)    # maximize the q
         self.atrain = tf.train.AdamOptimizer(LR_A).minimize(a_loss, var_list=self.ae_params)
@@ -101,6 +101,12 @@ class DDPG(object):
 
     def predict_shat(self, s, a):
         return self.sess.run(self.s_hat, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :]})
+
+    def get_td_error(self, s, a, r, s_):
+        r = np.array([r])
+        print(s.shape, a.shape, r.shape, s_.shape)
+        return self.sess.run(self.td_error, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :], self.R: r[np.newaxis, :], self.S_: s_[np.newaxis, :]})
+
 
     def learn(self):
         # soft target replacement
@@ -207,6 +213,8 @@ for i in range(MAX_EPISODES):
         #     ddpg.store_transition(s, a, r / 10, s_hat)        
         # else:
         #     ddpg.store_transition(s, a, r / 10, s_)
+        td_err = ddpg.get_td_error(s, a, r/10, s_)
+        print(td_err)
 
         ddpg.store_transition(s, a, r / 10, s_)
         if(d_loss < 0.5):
