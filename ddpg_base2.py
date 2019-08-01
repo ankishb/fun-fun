@@ -5,7 +5,7 @@ import numpy as np
 import gym
 import time
 import matplotlib.pyplot as plt
-
+from cont_cart_pole import *
 
 #####################  hyper parameters  ####################
 
@@ -16,11 +16,15 @@ LR_C = 0.002    # learning rate for critic
 LR_D = 0.001    # learning rate for critic
 GAMMA = 0.9     # reward discount
 TAU = 0.01      # soft replacement
-MEMORY_CAPACITY = 10000
-BATCH_SIZE = 32
+MEMORY_CAPACITY = 5000
+BATCH_SIZE = 100
 
-RENDER = True
-ENV_NAME = 'Pendulum-v0'
+RENDER = False
+# ENV_NAME = 'Pendulum-v0'
+# ENV_NAME = 'CartPole-v0' #discrete
+# ENV_NAME = 'MountainCar-v0' #discrete
+# ENV_NAME = 'Acrobot-v1'
+ENV_NAME = 'MountainCarContinuous-v0'
 
 ###############################  DDPG  ####################################
 
@@ -161,11 +165,12 @@ class DDPG(object):
             return tf.layers.dense(net, 1, trainable=trainable)  # Q(s,a)
 
 ###############################  training  ####################################
-
+# env = ContinuousCartPoleEnv()
 env = gym.make(ENV_NAME)
 env = env.unwrapped
 env.seed(1)
 
+print(env.observation_space.shape, env.action_space)
 s_dim = env.observation_space.shape[0]
 a_dim = env.action_space.shape[0]
 a_bound = env.action_space.high
@@ -183,6 +188,7 @@ var = 3  # control exploration
 count = 0;
 total_sample = 0;
 t1 = time.time()
+MAX_EPISODES = 400
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
@@ -192,8 +198,9 @@ for i in range(MAX_EPISODES):
     #     s_, r, done, info = env.step(a)
     #     ddpg.dynamics_train(s, a, s_)
     #     s = s_
-
-    for j in range(MAX_EP_STEPS):
+    done = False
+    while not done:
+    # for j in range(MAX_EP_STEPS):
         total_sample += 1
         # if RENDER:
         #     env.render()
@@ -216,13 +223,15 @@ for i in range(MAX_EPISODES):
         #     ddpg.store_transition(s, a, r / 10, s_hat)        
         # else:
         #     ddpg.store_transition(s, a, r / 10, s_)
-        td_err = ddpg.get_td_error(s, a, r/10, s_)
+        
+        ## td error caluclation
+        # td_err = ddpg.get_td_error(s, a, r, s_)
         # print(td_err)
-        td_errores.append(td_err)
+        # td_errores.append(td_err)
 
-        ddpg.store_transition(s, a, r / 10, s_, td_err)
+        ddpg.store_transition(s, a, r, s_)
         if(d_loss < 0.5):
-            ddpg.store_transition(s, a, r / 10, s_hat)
+            ddpg.store_transition(s, a, r , s_hat)
             count = count+1
 
         if ddpg.pointer > MEMORY_CAPACITY:
@@ -232,13 +241,15 @@ for i in range(MAX_EPISODES):
 
         s = s_
         ep_reward += r
-        if j == MAX_EP_STEPS-1:
-            print('Episode:', i, ' Reward: %i' % int(ep_reward), 'td-err: %.4f' % np.mean(td_errores), 'td-var: %.4f' % np.var(td_errores), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
+        # if j == MAX_EP_STEPS-1:
+        if done:
+            print('Episode:', i, ' Reward: %i' % int(ep_reward), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
+            # print('Episode:', i, ' Reward: %i' % int(ep_reward), 'td-err: %.4f' % np.mean(td_errores), 'td-var: %.4f' % np.var(td_errores), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             r_store.append(ep_reward)
             d_store_mean.append(np.mean(d_losses))
             d_store_var.append(np.var(d_losses))
-            td_store_mean.append(np.mean(td_errores))
-            td_store_var.append(np.var(td_errores))
+            # td_store_mean.append(np.mean(td_errores))
+            # td_store_var.append(np.var(td_errores))
             d_losses = []
             td_errores = []
             # if ep_reward > -300:RENDER = True
@@ -252,7 +263,7 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='dyn-mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-ax[2].plot(range(len(r_store)), td_store_mean, label='td-mean')
-# ax[1].plot(range(len(r_store)), d_store_var, label='var')
-ax[2].fill_between(range(len(r_store)), np.array(td_store_mean) - np.array(td_store_var), np.array(td_store_mean) + np.array(td_store_var), color='gray', alpha=0.2)
-fig.savefig('results8.png')
+# ax[2].plot(range(len(r_store)), td_store_mean, label='td-mean')
+# # ax[1].plot(range(len(r_store)), d_store_var, label='var')
+# ax[2].fill_between(range(len(r_store)), np.array(td_store_mean) - np.array(td_store_var), np.array(td_store_mean) + np.array(td_store_var), color='gray', alpha=0.2)
+fig.savefig('results10.png')
