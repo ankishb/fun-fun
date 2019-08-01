@@ -90,9 +90,14 @@ class DDPG(object):
     def choose_action(self, s):
         return self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
 
-    def dynamics_train(self, s, a, s_):
+    def dynamics_train(self):
         # print(s.shape, a.shape, s_.shape)
-        self.sess.run(self.dtrain, {self.S_: s_[np.newaxis, :], self.S: s[np.newaxis, :], self.a: a[np.newaxis, :]})
+        indices = np.random.choice(MEMORY_CAPACITY, size=BATCH_SIZE)
+        bt = self.memory[indices, :]
+        bs = bt[:, :self.s_dim]
+        ba = bt[:, self.s_dim: self.s_dim + self.a_dim]
+        bs_ = bt[:, -self.s_dim:]
+        self.sess.run(self.dtrain, {self.S_: bs_, self.S: bs, self.a: ba})
 
     def predict_shat(self, s, a):
         return self.sess.run(self.s_hat, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :]})
@@ -170,6 +175,14 @@ t1 = time.time()
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
+    # for k in range(MAX_EP_STEPS):
+    #     a = ddpg.choose_action(s)
+    #     a = np.clip(np.random.normal(a, var), -2, 2)    # add randomness to action selection for exploration
+    #     s_, r, done, info = env.step(a)
+    #     ddpg.dynamics_train(s, a, s_)
+    #     s = s_
+
+    s = env.reset()
     for j in range(MAX_EP_STEPS):
         # if RENDER:
         #     env.render()
@@ -184,17 +197,20 @@ for i in range(MAX_EPISODES):
         s_hat = s_hat.reshape(-1)
         d_loss = np.linalg.norm(s_hat - s_)
         d_losses.append(d_loss)
-        ddpg.dynamics_train(s, a, s_)
+        # ddpg.dynamics_train(s, a, s_)
+
         ## train dynamics model
         # print(s_hat.reshape(-1).shape, s_.shape)
-        if i > MAX_EPISODES/2:
-            ddpg.store_transition(s, a, r / 10, s_hat)
-        
-        else:
-            ddpg.store_transition(s, a, r / 10, s_)
+        # if i > MAX_EPISODES/2:
+        #     ddpg.store_transition(s, a, r / 10, s_hat)        
+        # else:
+        #     ddpg.store_transition(s, a, r / 10, s_)
+
+        ddpg.store_transition(s, a, r / 10, s_)
 
         if ddpg.pointer > MEMORY_CAPACITY:
             var *= .9995    # decay the action randomness
+            ddpg.dynamics_train()
             ddpg.learn()
 
         s = s_
@@ -214,4 +230,4 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-fig.savefig('results3.png')
+fig.savefig('results4.png')
