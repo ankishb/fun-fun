@@ -171,6 +171,8 @@ d_store_mean = []
 d_store_var = []
 d_losses = []
 var = 3  # control exploration
+count = 0;
+total_sample = 0;
 t1 = time.time()
 for i in range(MAX_EPISODES):
     s = env.reset()
@@ -182,8 +184,8 @@ for i in range(MAX_EPISODES):
     #     ddpg.dynamics_train(s, a, s_)
     #     s = s_
 
-    s = env.reset()
     for j in range(MAX_EP_STEPS):
+        total_sample += 1
         # if RENDER:
         #     env.render()
 
@@ -207,6 +209,9 @@ for i in range(MAX_EPISODES):
         #     ddpg.store_transition(s, a, r / 10, s_)
 
         ddpg.store_transition(s, a, r / 10, s_)
+        if(d_loss < 0.5):
+            ddpg.store_transition(s, a, r / 10, s_hat)
+            count = count+1
 
         if ddpg.pointer > MEMORY_CAPACITY:
             var *= .9995    # decay the action randomness
@@ -224,10 +229,12 @@ for i in range(MAX_EPISODES):
             # if ep_reward > -300:RENDER = True
             break
 print('Running time: ', time.time() - t1)
+print("total used sample: ", total_sample)
+print("total augmented sample: ", count)
 
 fig, ax = plt.subplots(1,2,figsize=(14,5))
 ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-fig.savefig('results4.png')
+fig.savefig('results7.png')
