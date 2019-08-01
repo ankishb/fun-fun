@@ -134,13 +134,13 @@ class DDPG(object):
 
     def _build_a(self, s, scope, trainable):
         with tf.variable_scope(scope):
-            net = tf.layers.dense(s, 30, activation=tf.nn.relu, name='l1', trainable=trainable)
+            net = tf.layers.dense(s, 10, activation=tf.nn.relu, name='l1', trainable=trainable)
             a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
             return tf.multiply(a, self.a_bound, name='scaled_a')
 
     def _build_dyn(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
-            nl1 = 30
+            nl1 = 10
             r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
             r22 = tf.contrib.layers.l2_regularizer(scale=0.01)
             # net_s = tf.layers.dense(s, 50, activation=tf.nn.relu, name='l_s', trainable=trainable)
@@ -157,7 +157,7 @@ class DDPG(object):
 
     def _build_c(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
-            n_l1 = 30
+            n_l1 = 10
             w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], trainable=trainable)
             w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1], trainable=trainable)
             b1 = tf.get_variable('b1', [1, n_l1], trainable=trainable)
@@ -188,7 +188,7 @@ var = 3  # control exploration
 count = 0;
 total_sample = 0;
 t1 = time.time()
-MAX_EPISODES = 400
+MAX_EPISODES = 100
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
@@ -199,7 +199,8 @@ for i in range(MAX_EPISODES):
     #     ddpg.dynamics_train(s, a, s_)
     #     s = s_
     done = False
-    while not done:
+    ep = 0;
+    while not done or ep != 5000:
     # for j in range(MAX_EP_STEPS):
         total_sample += 1
         # if RENDER:
@@ -209,7 +210,7 @@ for i in range(MAX_EPISODES):
         a = ddpg.choose_action(s)
         a = np.clip(np.random.normal(a, var), -2, 2)    # add randomness to action selection for exploration
         s_, r, done, info = env.step(a)
-
+        # print(r, end=" ")
         ## train dynamics model
         s_hat = ddpg.predict_shat(s, a)
         s_hat = s_hat.reshape(-1)
@@ -239,10 +240,13 @@ for i in range(MAX_EPISODES):
             ddpg.dynamics_train()
             ddpg.learn()
 
+        # print(count)
         s = s_
         ep_reward += r
         # if j == MAX_EP_STEPS-1:
-        if done:
+        # print(ep)
+        ep = ep + 1
+        if done or ep == 4999:
             print('Episode:', i, ' Reward: %i' % int(ep_reward), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             # print('Episode:', i, ' Reward: %i' % int(ep_reward), 'td-err: %.4f' % np.mean(td_errores), 'td-var: %.4f' % np.var(td_errores), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             r_store.append(ep_reward)
@@ -253,6 +257,7 @@ for i in range(MAX_EPISODES):
             d_losses = []
             td_errores = []
             # if ep_reward > -300:RENDER = True
+            ep = 0
             break
 print('Running time: ', time.time() - t1)
 print("total used sample: ", total_sample)
@@ -266,4 +271,4 @@ ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_stor
 # ax[2].plot(range(len(r_store)), td_store_mean, label='td-mean')
 # # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 # ax[2].fill_between(range(len(r_store)), np.array(td_store_mean) - np.array(td_store_var), np.array(td_store_mean) + np.array(td_store_var), color='gray', alpha=0.2)
-fig.savefig('results10.png')
+fig.savefig('results11.png')
