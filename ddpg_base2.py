@@ -20,11 +20,11 @@ MEMORY_CAPACITY = 5000
 BATCH_SIZE = 100
 
 RENDER = False
-# ENV_NAME = 'Pendulum-v0'
+ENV_NAME = 'Pendulum-v0'
 # ENV_NAME = 'CartPole-v0' #discrete
 # ENV_NAME = 'MountainCar-v0' #discrete
 # ENV_NAME = 'Acrobot-v1'
-ENV_NAME = 'MountainCarContinuous-v0'
+# ENV_NAME = 'MountainCarContinuous-v0'
 
 ###############################  DDPG  ####################################
 
@@ -143,13 +143,11 @@ class DDPG(object):
             nl1 = 10
             r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
             r22 = tf.contrib.layers.l2_regularizer(scale=0.01)
-            # net_s = tf.layers.dense(s, 50, activation=tf.nn.relu, name='l_s', trainable=trainable)
-            # net_a = tf.layers.dense(a, 50, activation=tf.nn.relu, name='l_a', trainable=trainable)
             wd_s = tf.get_variable('wd_s', [self.s_dim, nl1], trainable=trainable, regularizer=r2)
             wd_a = tf.get_variable('wd_a', [self.a_dim, nl1], trainable=trainable, regularizer=r2)
             bd   = tf.get_variable('bd', [1, nl1], trainable=trainable, regularizer=r2)
-            net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) + bd)
-            net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.relu, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
+            net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) +bd)
+            net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.sigmoid, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
             # a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
             return net_sa
 
@@ -188,7 +186,7 @@ var = 3  # control exploration
 count = 0;
 total_sample = 0;
 t1 = time.time()
-MAX_EPISODES = 100
+MAX_EPISODES = 200
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
@@ -200,8 +198,8 @@ for i in range(MAX_EPISODES):
     #     s = s_
     done = False
     ep = 0;
-    while not done or ep != 5000:
-    # for j in range(MAX_EP_STEPS):
+    # while not done or ep != 5000:
+    for j in range(MAX_EP_STEPS):
         total_sample += 1
         # if RENDER:
         #     env.render()
@@ -231,7 +229,11 @@ for i in range(MAX_EPISODES):
         # td_errores.append(td_err)
 
         ddpg.store_transition(s, a, r, s_)
-        if(d_loss < 0.5):
+        # if(d_loss < 0.5):
+        epsilon = 0.5
+        drop_rate = 20
+        power_fun = 0.5
+        if(d_loss < epsilon* (power_fun**((1+i)/drop_rate))): # power loss function
             ddpg.store_transition(s, a, r , s_hat)
             count = count+1
 
@@ -246,7 +248,7 @@ for i in range(MAX_EPISODES):
         # if j == MAX_EP_STEPS-1:
         # print(ep)
         ep = ep + 1
-        if done or ep == 4999:
+        if done or ep == MAX_EP_STEPS-1:
             print('Episode:', i, ' Reward: %i' % int(ep_reward), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             # print('Episode:', i, ' Reward: %i' % int(ep_reward), 'td-err: %.4f' % np.mean(td_errores), 'td-var: %.4f' % np.var(td_errores), 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             r_store.append(ep_reward)
@@ -263,7 +265,7 @@ print('Running time: ', time.time() - t1)
 print("total used sample: ", total_sample)
 print("total augmented sample: ", count)
 
-fig, ax = plt.subplots(1,3,figsize=(18,5))
+fig, ax = plt.subplots(1,2,figsize=(18,5))
 ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='dyn-mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
@@ -271,4 +273,4 @@ ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_stor
 # ax[2].plot(range(len(r_store)), td_store_mean, label='td-mean')
 # # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 # ax[2].fill_between(range(len(r_store)), np.array(td_store_mean) - np.array(td_store_var), np.array(td_store_mean) + np.array(td_store_var), color='gray', alpha=0.2)
-fig.savefig('results11.png')
+fig.savefig('new_exp/results2.png')

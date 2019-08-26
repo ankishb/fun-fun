@@ -53,6 +53,17 @@ class DDPG(object):
             # otherwise the self.a is from Actor when updating Actor
             self.s_hat = self._build_dyn(self.S, self.a, scope='eval', trainable=True)
 
+        ################################################################################################################
+        with tf.variable_scope('Encoder'):
+            [self.z_mu, self.z_logsigma] = self._build_enc(self.s, scope='eval', trainable=True)
+        
+        self.z_samples = sample_z(BATCH_SIZE, self.z_mu, self.z_logsigma)
+
+        with tf.variable_scope('Decoder'):
+            [self.x_mu, self.x_logsigma] = self._build_dec(self.z_samples, scope='eval', trainable=True)
+
+        ################################################################################################################
+
         # networks parameters
         self.ae_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/eval')
         self.at_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Actor/target')
@@ -60,10 +71,11 @@ class DDPG(object):
         self.ct_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Critic/target')
 
         self.dy_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Dynamics/eval')
+        self.enc_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Encoder/eval')
+        self.dec_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='Decoder/eval')
 
         # target net replacement
-        self.soft_replace = [tf.assign(t, (1 - TAU) * t + TAU * e)
-                             for t, e in zip(self.at_params + self.ct_params, self.ae_params + self.ce_params)]
+        self.soft_replace = [tf.assign(t, (1 - TAU)*t + TAU*e) for t, e in zip(self.at_params + self.ct_params, self.ae_params + self.ce_params)]
 
         q_target = self.R + GAMMA * q_
         # in the feed_dic for the td_error, the self.a should change to actions in memory
@@ -76,10 +88,34 @@ class DDPG(object):
         d_loss = tf.losses.mean_squared_error(labels=self.S_, predictions=self.s_hat)
 
         # r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
-        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, scope='Dynamics/eval')
         reg_constant = 0.01  # Choose an appropriate one.
         d_loss1 = d_loss + reg_constant * sum(reg_losses)
         
+        ################################################################################################################
+        # log-likelihood p(x/z) = log(sig^2) + (x - mu)^2 / 2sig^2
+        reconstruct_loss = tf.reduce_sum(0.5* self.x_logsigma + (tf.square(self.S - self.x_mu) / (2.0*tf.exp(self.x_logsigma))), 1)
+        # KL-div loss = Dkl(q(z/x)||p(z)) = Dkl(N(mu, sigma) || N(0,1))
+        # Dkl = trace(sigma) + mu*mu - k -log(det(sigma))
+        # Dkl = exp(log(sigma)) + mu*mu - 1 -log(sigma)
+        dkl_loss = -0.5 * tf.reduce_sum(-tf.exp(self.z_logsigma) - tf.square(self.z_mu) + 1 + self.z_logsigma, 1)
+        self.vae_loss = tf.reduce_mean(reconstruct_loss + dkl_loss)
+        
+
+        ################################################################################################################
+        enc_reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, scope='Encoder/eval')
+        dec_reg_loss = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, scope='Decoder/eval')
+        reg_constant = 1  # Choose an appropriate one.
+        self.vae_loss_with_reg = self.vae_loss + reg_constant * sum(enc_reg_loss) + reg_constant * sum(dec_reg_loss)
+        ################################################################################################################
+        
+
+        # self.dec_train = tf.train.AdamOptimizer(learning_rate=0.01).minimize(self.vae_loss, var_list=self.dec_params)
+        # self.enc_train = tf.train.AdamOptimizer(learning_rate=0.01).minimize(self.vae_loss, var_list=self.enc_params)
+        # self.vae_train = tf.train.AdamOptimizer(learning_rate=0.01).minimize(self.vae_loss, var_list=[self.dec_params, self.enc_params])
+        self.vae_train = tf.train.AdamOptimizer(learning_rate=0.01).minimize(self.vae_loss_with_reg, var_list=[self.dec_params, self.enc_params])
+
+        ################################################################################################################
         """
         r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
         reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
@@ -132,25 +168,6 @@ class DDPG(object):
         self.memory[index, :] = transition
         self.pointer += 1
 
-    def _build_a(self, s, scope, trainable):
-        with tf.variable_scope(scope):
-            net = tf.layers.dense(s, 10, activation=tf.nn.relu, name='l1', trainable=trainable)
-            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
-            return tf.multiply(a, self.a_bound, name='scaled_a')
-
-    def _build_enc(self, s, scope, trainable):
-        with tf.variable_scope(scope):
-            net = tf.layers.dense(s, 10, activation=tf.nn.relu, name='l1', trainable=trainable)
-            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
-            return tf.multiply(a, self.a_bound, name='scaled_a')
-
-    def _build_dec(self, s, scope, trainable):
-        with tf.variable_scope(scope):
-            net = tf.layers.dense(s, 10, activation=tf.nn.relu, name='l1', trainable=trainable)
-            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
-            return tf.multiply(a, self.a_bound, name='scaled_a')
-
-
     def _build_dyn(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
             nl1 = 10
@@ -164,7 +181,77 @@ class DDPG(object):
             # a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
             return net_sa
 
+################################################################################################################################
+    def _build_enc(self, s, scope, trainable):
+        with tf.variable_scope(scope):
+            nz = 1
+            nx = 2
+            enh1 = 10
+            enh2 = 10
 
+            r2 = tf.contrib.layers.l2_regularizer(scale=0.001)
+            ew1 = tf.get_variable('ew1', tf.truncated_normal(shape=[nx,enh1], stddev=0.1), trainable=trainable, regularizer=r2)
+            ew2 = tf.get_variable('ew2',tf.truncated_normal(shape=[enh1,enh2], stddev=0.1), trainable=trainable, regularizer=r2)
+            ew3 = tf.get_variable('ew3',tf.truncated_normal(shape=[enh2,nz], stddev=0.1), trainable=trainable, regularizer=r2)
+            ew4 = tf.get_variable('ew4',tf.truncated_normal(shape=[enh2,nz], stddev=0.1), trainable=trainable, regularizer=r2)
+
+            eb1 = tf.get_variable('eb1',tf.constant(0.1, shape=[enh1]), trainable=trainable, regularizer=r2)
+            eb2 = tf.get_variable('eb2',tf.constant(0.1, shape=[enh2]), trainable=trainable, regularizer=r2)
+            eb3 = tf.get_variable('eb3',tf.constant(0.1, shape=[nz]), trainable=trainable, regularizer=r2)
+            eb4 = tf.get_variable('eb4',tf.constant(0.1, shape=[nz]), trainable=trainable, regularizer=r2)
+            # net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) +bd)
+            # net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.sigmoid, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
+
+            eh1 = tf.nn.softplus(tf.matmul(s, ew1) + eb1)
+            eh2 = tf.nn.softplus(tf.matmul(eh1, ew2) + eb2)
+
+            # z ~ N(mu, sigma)
+            z_mu = tf.add(tf.matmul(eh2, ew3), eb3)
+            z_logsigma = tf.add(tf.matmul(eh2, ew4), eb4)
+
+            return [z_mu, z_logsigma]
+
+    def sample_z(self, batch_size=500, mu, logsigma):
+        """z = sample_z(batch_size, z_mu, z_logsigma)"""
+        eps = tf.random_normal(shape=[batch_size, nz], mean=0, stddev=1, dtype=tf.float32, seed=1337)
+        logsigma = tf.sqrt(tf.exp(logsigma))
+        z = tf.add(mu, tf.math.multiply(logsigma, eps))
+        return z
+
+    def _build_dec(self, z, scope, trainable):
+        with tf.variable_scope(scope):
+            nz = 1
+            nx = 2
+            dnh1 = 10
+            dnh2 = 10
+
+            r2 = tf.contrib.layers.l2_regularizer(scale=0.001)
+            dw1 = tf.get_variable('dw1', tf.truncated_normal(shape=[nz,dnh1], stddev=0.1), trainable=trainable, regularizer=r2)
+            dw2 = tf.get_variable('dw2',tf.truncated_normal(shape=[dnh1,dnh2], stddev=0.1), trainable=trainable, regularizer=r2)
+            dw3 = tf.get_variable('dw3',tf.truncated_normal(shape=[dnh2,nx], stddev=0.1), trainable=trainable, regularizer=r2)
+            dw4 = tf.get_variable('dw4',tf.truncated_normal(shape=[dnh2,nx], stddev=0.1), trainable=trainable, regularizer=r2)
+
+            db1 = tf.get_variable('db1',tf.constant(0.1, shape=[dnh1]), trainable=trainable, regularizer=r2)
+            db2 = tf.get_variable('db2',tf.constant(0.1, shape=[dnh2]), trainable=trainable, regularizer=r2)
+            db3 = tf.get_variable('db3',tf.constant(0.1, shape=[nx]), trainable=trainable, regularizer=r2)
+            db4 = tf.get_variable('db4',tf.constant(0.1, shape=[nx]), trainable=trainable, regularizer=r2)
+            # net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) +bd)
+            # net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.sigmoid, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
+
+            dh1 = tf.nn.softplus(tf.matmul(z, dw1) + db1)
+            dh2 = tf.nn.softplus(tf.matmul(dh1, dw2) + db2)
+
+            x_mu = tf.add(tf.matmul(dh2, dw3), db3)
+            x_logsigma = tf.add(tf.matmul(dh2, dw4), db4)
+
+            return [x_mu, x_logsigma]
+################################################################################################################################
+
+    def _build_a(self, s, scope, trainable):
+        with tf.variable_scope(scope):
+            net = tf.layers.dense(s, 10, activation=tf.nn.relu, name='l1', trainable=trainable)
+            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
+            return tf.multiply(a, self.a_bound, name='scaled_a')
 
     def _build_c(self, s, a, scope, trainable):
         with tf.variable_scope(scope):

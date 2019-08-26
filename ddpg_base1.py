@@ -20,8 +20,9 @@ MEMORY_CAPACITY = 10000
 BATCH_SIZE = 32
 
 RENDER = True
-ENV_NAME = 'Pendulum-v0'
-
+# ENV_NAME = 'Pendulum-v0'
+# ENV_NAME = 'LunarLanderContinuous-v2'
+ENV_NAME = 'BipedalWalker-v2'
 ###############################  DDPG  ####################################
 
 class DDPG(object):
@@ -104,7 +105,7 @@ class DDPG(object):
 
     def get_td_error(self, s, a, r, s_):
         r = np.array([r])
-        print(s.shape, a.shape, r.shape, s_.shape)
+        # print(s.shape, a.shape, r.shape, s_.shape)
         return self.sess.run(self.td_error, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :], self.R: r[np.newaxis, :], self.S_: s_[np.newaxis, :]})
 
 
@@ -179,6 +180,7 @@ d_losses = []
 var = 3  # control exploration
 count = 0;
 total_sample = 0;
+MAX_EPISODES = 5
 t1 = time.time()
 for i in range(MAX_EPISODES):
     s = env.reset()
@@ -193,7 +195,7 @@ for i in range(MAX_EPISODES):
     for j in range(MAX_EP_STEPS):
         total_sample += 1
         # if RENDER:
-        #     env.render()
+        env.render()
 
         # Add exploration noise
         a = ddpg.choose_action(s)
@@ -214,7 +216,9 @@ for i in range(MAX_EPISODES):
         # else:
         #     ddpg.store_transition(s, a, r / 10, s_)
         td_err = ddpg.get_td_error(s, a, r/10, s_)
-        print(td_err)
+        print(td_err, end=" ")
+        td_err1 = ddpg.get_td_error(s, a, r/10, s_hat)
+        print(td_err1)
 
         ddpg.store_transition(s, a, r / 10, s_)
         if(d_loss < 0.5):
@@ -245,4 +249,8 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-fig.savefig('results7.png')
+fig.savefig('results11.png')
+
+
+
+

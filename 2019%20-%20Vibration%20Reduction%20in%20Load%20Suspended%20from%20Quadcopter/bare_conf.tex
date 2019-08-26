@@ -1,0 +1,145 @@
+
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+
+% *** GRAPHICS RELATED PACKAGES ***
+%
+\ifCLASSINFOpdf
+  \usepackage[pdftex]{graphicx}
+  
+  % declare the path(s) where your graphic files are
+  % \graphicspath{{../pdf/}{../jpeg/}}
+  % and their extensions so you won't have to specify these with
+  % every instance of \includegraphics
+  % \DeclareGraphicsExtensions{.pdf,.jpeg,.png}
+\else
+  % or other class option (dvipsone, dvipdf, if not using dvips). graphicx
+  % will default to the driver specified in the system graphics.cfg if no
+  % driver is specified.
+  % \usepackage[dvips]{graphicx}
+  % declare the path(s) where your graphic files are
+  % \graphicspath{{../eps/}}
+  % and their extensions so you won't have to specify these with
+  % every instance of \includegraphics
+  % \DeclareGraphicsExtensions{.eps}
+\fi
+
+\usepackage{subfig}
+\usepackage{color}
+\usepackage{multicol}
+\usepackage{comment}
+\usepackage{hyperref}
+% *** MATH PACKAGES ***
+%
+\usepackage[cmex10]{amsmath}
+\usepackage{amsfonts}
+\usepackage{upgreek}
+
+
+
+
+% *** SPECIALIZED LIST PACKAGES ***
+%
+%\usepackage{algorithmic}
+% algorithmic.sty was written by Peter Williams and Rogerio Brito.
+% This package provides an algorithmic environment fo describing algorithms.
+
+
+
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+
+\begin{document}
+
+\title{Unsupervised technique for Sample Augmentation in RL }
+
+\iffalse
+\author{\IEEEauthorblockN{Author}
+\and
+\IEEEauthorblockN{Author}
+\and
+\IEEEauthorblockN{Author}
+\and
+\IEEEauthorblockN{Author}}
+\fi
+
+
+% conference papers do not typically use \thanks and this command
+% is locked out in conference mode. If really needed, such as for
+% the acknowledgment of grants, issue a \IEEEoverridecommandlockouts
+% after \documentclass
+
+% for over three affiliations, or if they all won't fit within the width
+% of the page, use this alternative format:
+% 
+\author{\IEEEauthorblockN{
+Ankish Bansal, Laxmidhar Behera
+% Add more authors below
+% James Kirk\IEEEauthorrefmark{3}, 
+% Montgomery Scott\IEEEauthorrefmark{3} and
+% Eldon Tyrell\IEEEauthorrefmark{4}
+}
+\IEEEauthorblockA{\IEEEauthorrefmark{1}Department of Electrical Engineering\\
+Indian Institute of Technology,
+Kanpur, India 208016}
+}
+
+
+
+
+% use for special paper notices
+%\IEEEspecialpapernotice{(Invited Paper)}
+
+
+
+
+% make the title area
+\maketitle
+
+% As a general rule, do not put math, special symbols or citations
+% in the abstract
+\begin{abstract}
+Today, we have many RL algorithms, which can become master of very complex task with in an hour. But it comes with a cost of computational power. In policy based algorithms, agent need millions of sample to master that task. In fact at the start of training, we don't have good sample to learn through. In this paper, we demonstrate a technique to augment the new sample from the task distribution using variational inference and estimation methods. Creating new sample are so helpful in some task, it reduce the training time by $30\% - 40\%$. Another advantage is to avoid the trapping region in the policy. In other words, while training, we use same sample many times, what happens is that it trapped in a region of isolated pointion in distribution, from where escaping is difficult, which leads to overfitting. But with the use of augmented or approximated sample, we can have better generality in task. In experimental section, we demonstrated the performance of naive approximation of distribution and using inference method.
+\end{abstract}
+
+\section{All reference}
+sutton2000policy
+sutton1998introduction
+mnih2016asynchronous
+heess2015learning
+silver2014deterministic
+schaul2015prioritized
+andrychowicz2017hindsight
+mnih2015human
+konda2000actor
+silver2016mastering
+
+\section{Related Work}
+Today, there are many well performed number of algorithms \cite{mnih2015human}\cite{mnih2016asynchronous}\cite{silver2014deterministic}\cite{silver2016mastering}\cite{schaul2015prioritized}\cite{andrychowicz2017hindsight}\cite{heess2015learning}, which can be master of very complex task. Policy gradient \cite{sutton2000policy} and actor critic \cite{konda2000actor} are one of that core ingredient of these algorithms. These are off-policy method. It comes with cost of computational power. This is still an open challenge in this domain. There are few methods, which models dynamics of task
+
+\section{Background}
+
+
+\begin{align}
+&J(\theta) = E_{\pi_\theta}[R(\tau)]
+\end{align}
+
+
+
+\section{Our Method}
+
+
+\section{Experiments}
+
+
+\section{Conclusion}
+
+
+
+\bibliographystyle{ieeetr}
+\bibliography{mybib.bib}
+
+
+
+% that's all folks
+\end{document}
