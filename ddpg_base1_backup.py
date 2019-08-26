@@ -1,9 +1,7 @@
 
-
 import tensorflow as tf
 import numpy as np
-import gym
-import time
+import gym, time
 import matplotlib.pyplot as plt
 
 
@@ -38,15 +36,12 @@ class DDPG(object):
         with tf.variable_scope('Actor'):
             self.a = self._build_a(self.S, scope='eval', trainable=True)
             a_ = self._build_a(self.S_, scope='target', trainable=False)
+        
         with tf.variable_scope('Critic'):
-            # assign self.a = a in memory when calculating q for td_error,
-            # otherwise the self.a is from Actor when updating Actor
             q = self._build_c(self.S, self.a, scope='eval', trainable=True)
             q_ = self._build_c(self.S_, a_, scope='target', trainable=False)
         
         with tf.variable_scope('Dynamics'):
-            # assign self.a = a in memory when calculating q for td_error,
-            # otherwise the self.a is from Actor when updating Actor
             self.s_hat = self._build_dyn(self.S, self.a, scope='eval', trainable=True)
 
         # networks parameters
@@ -76,12 +71,6 @@ class DDPG(object):
         reg_constant = 0.01  # Choose an appropriate one.
         d_loss1 = d_loss + reg_constant * sum(reg_losses)
         
-        """
-        r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
-        reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
-        reg_constant = 0.01  # Choose an appropriate one.
-        loss = my_normal_loss + reg_constant * sum(reg_losses)
-        """
 
         self.dtrain = tf.train.AdamOptimizer(LR_D).minimize(d_loss1, var_list=self.dy_params)
 
@@ -133,14 +122,11 @@ class DDPG(object):
             nl1 = 30
             r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
             r22 = tf.contrib.layers.l2_regularizer(scale=0.01)
-            # net_s = tf.layers.dense(s, 50, activation=tf.nn.relu, name='l_s', trainable=trainable)
-            # net_a = tf.layers.dense(a, 50, activation=tf.nn.relu, name='l_a', trainable=trainable)
             wd_s = tf.get_variable('wd_s', [self.s_dim, nl1], trainable=trainable, regularizer=r2)
             wd_a = tf.get_variable('wd_a', [self.a_dim, nl1], trainable=trainable, regularizer=r2)
             bd   = tf.get_variable('bd', [1, nl1], trainable=trainable, regularizer=r2)
             net_sa = tf.nn.relu(tf.matmul(s, wd_s) + tf.matmul(a, wd_a) + bd)
             net_sa = tf.layers.dense(net_sa, s_dim, activation=tf.nn.relu, name='l_sa', trainable=trainable, kernel_regularizer=r22, bias_regularizer=r22)
-            # a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
             return net_sa
 
 
@@ -173,40 +159,24 @@ d_losses = []
 var = 3  # control exploration
 count = 0;
 total_sample = 0;
+# MAX_EPISODES = 100
 t1 = time.time()
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
-    # for k in range(MAX_EP_STEPS):
-    #     a = ddpg.choose_action(s)
-    #     a = np.clip(np.random.normal(a, var), -2, 2)    # add randomness to action selection for exploration
-    #     s_, r, done, info = env.step(a)
-    #     ddpg.dynamics_train(s, a, s_)
-    #     s = s_
 
     for j in range(MAX_EP_STEPS):
         total_sample += 1
-        # if RENDER:
-        #     env.render()
+        # if RENDER: env.render()
 
-        # Add exploration noise
         a = ddpg.choose_action(s)
-        a = np.clip(np.random.normal(a, var), -2, 2)    # add randomness to action selection for exploration
+        a = np.clip(np.random.normal(a, var), -2, 2)
         s_, r, done, info = env.step(a)
 
-        ## train dynamics model
         s_hat = ddpg.predict_shat(s, a)
         s_hat = s_hat.reshape(-1)
         d_loss = np.linalg.norm(s_hat - s_)
         d_losses.append(d_loss)
-        # ddpg.dynamics_train(s, a, s_)
-
-        ## train dynamics model
-        # print(s_hat.reshape(-1).shape, s_.shape)
-        # if i > MAX_EPISODES/2:
-        #     ddpg.store_transition(s, a, r / 10, s_hat)        
-        # else:
-        #     ddpg.store_transition(s, a, r / 10, s_)
 
         ddpg.store_transition(s, a, r, s_)
         epsilon = 0.5
@@ -258,7 +228,7 @@ height = [40000, 40000 - count]
 bars = ["without vi", "with vi"]
 y_pos = np.arange(len(bars))
 ax[1].bar(y_pos, height)
-ax[1].xticks(y_pos, bars)
+ax[1].set_xticks(y_pos, bars)
 
 fig.savefig('new_exp/results133.png')
 
