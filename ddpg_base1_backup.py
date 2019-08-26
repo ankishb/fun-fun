@@ -208,10 +208,11 @@ for i in range(MAX_EPISODES):
         # else:
         #     ddpg.store_transition(s, a, r / 10, s_)
 
-        ddpg.store_transition(s, a, r / 10, s_)
+        ddpg.store_transition(s, a, r, s_)
         epsilon = 0.5
         drop_rate = 20
         power_fun = 0.9
+        # eps_ = 0
         eps_ = epsilon* (power_fun**((1+i)/drop_rate))
         if(d_loss < eps_): # power loss function
         # if(d_loss < 0.5):
@@ -242,5 +243,27 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-np.save('new_exp/reward.npy', r_store)
-fig.savefig('new_exp/results12.png')
+np.save('new_exp/w_reward.npy', r_store)
+fig.savefig('new_exp/results122.png')
+
+
+######### prev
+r_prev = np.load('new_exp/wo_reward.npy')
+fig, ax = plt.subplots(1,2,figsize=(14,5))
+ax[0].plot(r_store, 'b', label='with vi')
+ax[0].plot(r_prev,'r', label='without vi')
+ax[0].legend()
+
+height = [40000, 40000 - count]
+bars = ["without vi", "with vi"]
+y_pos = np.arange(len(bars))
+ax[1].bar(y_pos, height)
+ax[1].xticks(y_pos, bars)
+
+fig.savefig('new_exp/results133.png')
+
+
+
+# Running time:  69.9507315158844
+# total used sample:  40000
+# total augmented sample:  14407
