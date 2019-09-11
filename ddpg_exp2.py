@@ -3,6 +3,21 @@ import tensorflow as tf
 import numpy as np
 import gym, time
 import matplotlib.pyplot as plt
+from collections import deque
+import random
+
+# ###############
+# ###############
+# drop_rate = 2
+# data = []
+# for i in range(200):
+#     data.append(3*0.95**((1+i)/drop_rate))
+
+# plt.figure(figsize=(12, 6))
+# plt.plot(range(200), data, 'o')
+# plt.show()
+# ###############
+# ###############
 
 
 #####################  hyper parameters  ####################
@@ -14,12 +29,13 @@ LR_C = 0.002    # learning rate for critic
 LR_D = 0.001    # learning rate for critic
 GAMMA = 0.9     # reward discount
 TAU = 0.01      # soft replacement
-MEMORY_CAPACITY = 10000
-BATCH_SIZE = 32
+# MEMORY_CAPACITY = 10000
+MEMORY_CAPACITY = 100
+BATCH_SIZE = 64
 
 RENDER = True
-# ENV_NAME = 'Pendulum-v0'
-ENV_NAME = 'LunarLanderContinuous-v2'
+ENV_NAME = 'Pendulum-v0'
+# ENV_NAME = 'LunarLanderContinuous-v2'
 
 ###############################  DDPG  ####################################
 
@@ -27,6 +43,8 @@ class DDPG(object):
     def __init__(self, a_dim, s_dim, a_bound,):
         self.memory = np.zeros((MEMORY_CAPACITY, s_dim * 2 + a_dim + 1), dtype=np.float32)
         self.pointer = 0
+        # self.memory = deque()
+
         self.sess = tf.Session()
 
         self.a_dim, self.s_dim, self.a_bound = a_dim, s_dim, a_bound,
@@ -80,27 +98,9 @@ class DDPG(object):
     def choose_action(self, s):
         return self.sess.run(self.a, {self.S: s[np.newaxis, :]})[0]
 
-    def dynamics_train(self):
-        # print(s.shape, a.shape, s_.shape)
-        bs, ba, br, bs_ = get_sample()
-
-        self.sess.run(self.dtrain, {self.S_: bs_, self.S: bs, self.a: ba})
-
-    def predict_shat(self, s, a):
-        return self.sess.run(self.s_hat, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :]})
-
-    def learn(self):
-        # soft target replacement
-        self.sess.run(self.soft_replace)
-        bs, ba, br, bs_ = get_sample()
-
-        self.sess.run(self.atrain, {self.S: bs})
-        self.sess.run(self.ctrain, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
-
-        
-######################################
-######################################
-    """
+    ######################################
+    ######################################
+    
     def get_sample(self):
         indices = np.random.choice(MEMORY_CAPACITY, size=BATCH_SIZE)
         bt = self.memory[indices, :]
@@ -109,30 +109,56 @@ class DDPG(object):
         br = bt[:, -self.s_dim - 1: -self.s_dim]
         bs_ = bt[:, -self.s_dim:]
         return bs, ba, br, bs_
+    
     """
-
     def get_sample(self):
         sample = random.sample(self.memory, BATCH_SIZE)
-        states, actions, rewards, next_states = zip(*sample)
-        return states, actions, rewards, next_states
-
-######################################
-######################################
+        # print(len(sample), type(sample), np.array(sample).shape)
+        # states, actions, rewards, next_states = zip(*sample)
+        # return states, actions, rewards, next_states
+        bt = np.array(self.memory)
+        bs = bt[:, :self.s_dim]
+        ba = bt[:, self.s_dim: self.s_dim + self.a_dim]
+        br = bt[:, -self.s_dim - 1: -self.s_dim]
+        bs_ = bt[:, -self.s_dim:]
+        return bs, ba, br, bs_
     """
+    
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, a, [r], s_))
-        # index = self.pointer % MEMORY_CAPACITY  # replace the old memory with new memory
-        # self.memory[index, :] = transition
-        # self.pointer += 1
+        index = self.pointer % MEMORY_CAPACITY  # replace the old memory with new memory
+        self.memory[index, :] = transition
+        self.pointer += 1
+
     """
     def store_transition(self, s, a, r, s_):
         transition = np.hstack((s, a, [r], s_))
         self.memory.append(transition)
         if len(self.memory) > MEMORY_CAPACITY:
             self.memory.popleft()
+    """
+    ######################################
+    ######################################
 
+    def dynamics_train(self):
+        # print(s.shape, a.shape, s_.shape)
+        bs, ba, br, bs_ = self.get_sample()
+        self.sess.run(self.dtrain, {self.S_: bs_, self.S: bs, self.a: ba})
+
+    def predict_shat(self, s, a):
+        return self.sess.run(self.s_hat, {self.S: s[np.newaxis, :], self.a: a[np.newaxis, :]})
+
+    def learn(self):
+        # soft target replacement
+        self.sess.run(self.soft_replace)
+        bs, ba, br, bs_ = self.get_sample()
+        # print(bs.shape, ba.shape, bs_.shape, br.shape)
+        self.sess.run(self.atrain, {self.S: bs})
+        self.sess.run(self.ctrain, {self.S: bs, self.a: ba, self.R: br, self.S_: bs_})
+
+        
     def _build_a(self, s, scope, trainable):
-        nl1 = 100
+        nl1 = 300
         with tf.variable_scope(scope):
             net = tf.layers.dense(s, nl1, activation=tf.nn.relu, name='l1', trainable=trainable)
             a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
@@ -140,7 +166,7 @@ class DDPG(object):
 
     def _build_dyn(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
-            nl1 = 30
+            nl1 = 100
             r2 = tf.contrib.layers.l2_regularizer(scale=0.1)
             r22 = tf.contrib.layers.l2_regularizer(scale=0.01)
             wd_s = tf.get_variable('wd_s', [self.s_dim, nl1], trainable=trainable, regularizer=r2)
@@ -154,7 +180,7 @@ class DDPG(object):
 
     def _build_c(self, s, a, scope, trainable):
         with tf.variable_scope(scope):
-            n_l1 = 100
+            n_l1 = 300
             w1_s = tf.get_variable('w1_s', [self.s_dim, n_l1], trainable=trainable)
             w1_a = tf.get_variable('w1_a', [self.a_dim, n_l1], trainable=trainable)
             b1 = tf.get_variable('b1', [1, n_l1], trainable=trainable)
@@ -181,13 +207,13 @@ var = 3  # control exploration
 count = 0;
 total_sample = 0;
 # MAX_EPISODES = 100
-MAX_EP_STEPS = 1000
+MAX_EP_STEPS = 180
 RENDER = True
 t1 = time.time()
 for i in range(MAX_EPISODES):
     s = env.reset()
     ep_reward = 0
-
+    var *= 0.99**((1+i)/10)
     for j in range(MAX_EP_STEPS):
         total_sample += 1
         # if RENDER: env.render()
@@ -196,7 +222,8 @@ for i in range(MAX_EPISODES):
         a = np.clip(np.random.normal(a, var), -2, 2)
         s_, r, done, info = env.step(a)
 
-        s_hat = ddpg.predict_shat(s, a)
+        # s_hat = ddpg.predict_shat(s, a)
+        s_hat = s_
         s_hat = s_hat.reshape(-1)
         d_loss = np.linalg.norm(s_hat - s_)
         d_losses.append(d_loss)
@@ -212,14 +239,19 @@ for i in range(MAX_EPISODES):
         #     ddpg.store_transition(s, a, r / 10, s_hat)
         #     count = count+1
 
-        if ddpg.pointer > MEMORY_CAPACITY:
-            var *= .9995    # decay the action randomness
-            ddpg.dynamics_train()
+        # if ddpg.pointer > MEMORY_CAPACITY:
+        #     var *= .9995    # decay the action randomness
+        if len(ddpg.memory) >= BATCH_SIZE:
+            # ddpg.dynamics_train()
             ddpg.learn()
+
+
+
 
         s = s_
         ep_reward += r
         if j == MAX_EP_STEPS-1 or done:
+            # var *= .9995
             print('Episode:', i, ' Reward: %04i' % int(ep_reward), 'Epsilon: %.3f' % eps_,'Explore: %.2f' % var, 'D_Mean: %.4f' %np.mean(d_losses), 'D_Var: %.4f' %np.var(d_losses))
             r_store.append(ep_reward)
             d_store_mean.append(np.mean(d_losses))
@@ -227,6 +259,7 @@ for i in range(MAX_EPISODES):
             d_losses = []
             # if ep_reward > -300:RENDER = True
             break
+
 print('Running time: ', time.time() - t1)
 print("total used sample: ", total_sample)
 print("total augmented sample: ", count)
@@ -236,24 +269,25 @@ ax[0].plot(r_store)
 ax[1].plot(range(len(r_store)), d_store_mean, label='mean')
 # ax[1].plot(range(len(r_store)), d_store_var, label='var')
 ax[1].fill_between(range(len(r_store)), np.array(d_store_mean) - np.array(d_store_var), np.array(d_store_mean) + np.array(d_store_var), color='gray', alpha=0.2)
-np.save('new_exp/w_reward.npy', r_store)
-fig.savefig('new_exp/results311.png')
+np.save('new_exp/wo_reward.npy', r_store)
+fig.savefig('new_exp/results711.png')
 
 
 ######### prev
-r_prev = np.load('new_exp/wo_reward.npy')
+r_prev = np.load('new_exp/w_reward.npy')
 fig, ax = plt.subplots(1,2,figsize=(14,5))
 ax[0].plot(r_store, 'b', label='with vi')
 ax[0].plot(r_prev,'r', label='without vi')
 ax[0].legend()
 
+count = 9300
 height = [40000, 40000 - count]
 bars = ["without vi", "with vi"]
 y_pos = np.arange(len(bars))
 ax[1].bar(y_pos, height)
 ax[1].set_xticks(y_pos, bars)
 
-fig.savefig('new_exp/results322.png')
+fig.savefig('new_exp/results722.png')
 
 
 
